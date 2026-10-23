@@ -1,0 +1,2 @@
+# cmd, Unix satır sonlu .bat dosyalarında takılabiliyor; CRLF olduğu gibi saklansın.
+*.bat -text

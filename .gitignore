@@ -1,0 +1,5 @@
+# Her bilgisayarda --install ile yeniden üretilir. Özel anahtar içerir, asla paylaşılmamalı.
+sertifika/
+
+__pycache__/
+*.pyc

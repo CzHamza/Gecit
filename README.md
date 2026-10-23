@@ -85,6 +85,29 @@ Sınırları var, saklamayayım:
 
 Discord'un ses sunucuları engelli değil zaten, sesli kanallara karışmıyor Geçit.
 
+## GoodbyeDPI ile farkı
+
+GoodbyeDPI'dan geldim ben de, o yüzden kıyaslamadan geçemezdim. İkisini aynı bilgisayarda, aynı anda ölçtüm; GoodbyeDPI'ı `turkey_dnsredir.cmd` ile çalıştırdım.
+
+| | GoodbyeDPI | Geçit |
+|---|---|---|
+| Bellek | ~6 MB | ~30-40 MB |
+| Çalışma şekli | Ağ paketlerini çekirdek sürücüsüyle (WinDivert) yakalayıp değiştiriyor | Bilgisayarında küçük bir proxy, sürücü yok |
+| Yönetici izni | Çalışması için şart | Sadece kurulumda bir kere |
+| Hangi programlar | Hepsi | Windows proxy ayarını kullananlar (tarayıcılar, Discord) |
+| Sertifika | Gerekmiyor | Discord güncelleyicisi için bir tane, sadece `updates.discord.com` |
+| Dil | C | Python, tek dosya |
+
+Hafiflikte GoodbyeDPI önde, saklamayayım. Python'ın kendisi yer kaplıyor, Geçit'in belleğinin çoğu ondan. 16 GB RAM'li bir bilgisayarda ikisi de yüzde birin çok altında kalıyor ama, farkı hissetmedim. İnternet hızını da ikisi de düşürmüyor.
+
+GoodbyeDPI her programın trafiğine karışabiliyor, Geçit sadece proxy ayarını kullananlara. Bunun iyi tarafı da var aslında, bir sonraki bölümde anlatıyorum.
+
+## Oyunlar ve anticheat
+
+Geçit çekirdek sürücüsü yüklemiyor, oyunların dosyalarına ya da belleğine dokunmuyor. Maç trafiği (çoğu oyunda UDP) proxy'den geçmiyor zaten, pingine etkisi yok. Başlatıcıların (Epic, Steam gibi) web trafiği geçebilir Geçit'ten, o kadar. Kısacası anticheat'lerin aradığı türden bir şey yapmıyor.
+
+Yine de her anticheat'in neye baktığını kimse tam bilemez, garanti veremem. Bir anticheat'e takılırsan issue aç lütfen, bakalım.
+
 ## Bilgisayarında neyi değiştiriyor
 
 Hepsi bu kadar:
@@ -95,8 +118,6 @@ Hepsi bu kadar:
 - Windows açılışında başlatma kaydı (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Gecit`)
 
 `python gecit.py --uninstall` bunların hepsini geri alıyor. Dışarıyla Geçit'in kendi başına konuştuğu tek şey DNS sorguları; onlar da şifreli gidiyor Cloudflare'e (1.1.1.1), Google'a (8.8.8.8) ve Quad9'a (9.9.9.9).
-
-Hafif bir şey bu arada. 35 MB civarı bellek kullanıyor, internet hızını düşürmüyor.
 
 ## Son olarak
 

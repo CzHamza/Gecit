@@ -1,0 +1,7 @@
+# Bu dosyadaki alan adları hiçbir zaman Geçit'ten geçmez, doğrudan bağlanır.
+# Oyunlar, başlatıcılar ve anticheat servisleri zaten gömülü listede var;
+# buraya kendi eklemek istediklerini yaz. Satır başına bir alan adı, alt alan adları da kapsanır.
+# Değişiklikten sonra Geçit'i kapatıp aç.
+#
+# Örnek:
+# bankam.com.tr

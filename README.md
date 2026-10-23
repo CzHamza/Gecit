@@ -104,7 +104,11 @@ GoodbyeDPI her programın trafiğine karışabiliyor, Geçit sadece proxy ayarı
 
 ## Oyunlar ve anticheat
 
-Geçit çekirdek sürücüsü yüklemiyor, oyunların dosyalarına ya da belleğine dokunmuyor. Maç trafiği (çoğu oyunda UDP) proxy'den geçmiyor zaten, pingine etkisi yok. Başlatıcıların (Epic, Steam gibi) web trafiği geçebilir Geçit'ten, o kadar. Kısacası anticheat'lerin aradığı türden bir şey yapmıyor.
+Geçit çekirdek sürücüsü yüklemiyor, oyunların dosyalarına ya da belleğine dokunmuyor, hiçbir sürece kod sokmuyor. Anticheat'lerin aradığı şeyler bunlar; Geçit'te yok. GoodbyeDPI'ın sürücüsü (WinDivert) var mesela, Geçit'in öyle bir parçası yok.
+
+Bir adım daha ileri gittim: oyunların, başlatıcıların ve anticheat servislerinin alan adları (Riot, Steam, Epic, Easy Anti-Cheat, FACEIT, BattlEye, EA, Battle.net…) Geçit'ten hiç geçmiyor. Windows'a verdiğim proxy ayarı bunlar için "doğrudan bağlan" diyor. Yani Riot Client, Steam ya da Vanguard açısından Geçit yokmuş gibi. Maç trafiği (çoğu oyunda UDP) zaten proxy'den geçmez, pingine de etkisi yok.
+
+Kendi eklemek istediğin bir şey olursa, mesela bankanın sitesi, `dogrudan.txt` dosyasına yaz, o da Geçit'e uğramaz.
 
 Yine de her anticheat'in neye baktığını kimse tam bilemez, garanti veremem. Bir anticheat'e takılırsan issue aç lütfen, bakalım.
 

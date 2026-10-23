@@ -21,6 +21,7 @@ import asyncio
 import base64
 import ctypes
 import hashlib
+import json
 import logging
 import logging.handlers
 import os
@@ -42,13 +43,55 @@ MODES = ["none", "tls", "tcp", "tls+tcp"]
 PROBE_HOST = "discord.com"
 TEST_HOSTS = ["discord.com", "gateway.discord.gg", "cdn.discordapp.com", "roblox.com", "wattpad.com"]
 
+# Hiçbir zaman Geçit'ten geçmeyecek alan adları: oyunlar, başlatıcılar, anticheat servisleri.
+# Bunlar Türkiye'de engelli değil. Geçit yokmuş gibi doğrudan bağlanmaları hem anticheat
+# açısından en temiz durum hem de Geçit'e gereksiz yük bindirmiyor. dogrudan.txt ile genişler.
+BYPASS_DOMAINS = [
+    # Riot: LoL, Valorant, Vanguard
+    "riotgames.com", "riotcdn.net", "leagueoflegends.com", "playvalorant.com", "pvp.net",
+    # Valve: Steam, CS2, VAC
+    "steampowered.com", "steamcommunity.com", "steamstatic.com", "steamcontent.com",
+    "steamserver.net", "valvesoftware.com",
+    # Epic: Rocket League, Fortnite, Easy Anti-Cheat
+    "epicgames.com", "epicgames.dev", "unrealengine.com", "easyanticheat.net", "easy.ac", "eac-cdn.com",
+    # EA, FACEIT, BattlEye
+    "ea.com", "origin.com", "eadp.com", "faceit.com", "faceit-cdn.net", "battleye.com",
+    # Diğer başlatıcılar
+    "battle.net", "blizzard.com", "ubisoft.com", "ubi.com", "gog.com", "xboxlive.com",
+]
+
 PAC = """function FindProxyForURL(url, host) {
+  host = host.toLowerCase();
   if (isPlainHostName(host) || dnsDomainIs(host, ".local") ||
       /^(127\\.|10\\.|192\\.168\\.|169\\.254\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.)/.test(host))
     return "DIRECT";
+  var direct = %s;
+  for (var i = 0; i < direct.length; i++)
+    if (host == direct[i] || dnsDomainIs(host, "." + direct[i]))
+      return "DIRECT";
   return "PROXY 127.0.0.1:%d; DIRECT";
 }
 """
+
+_client_ctx = None
+_tls13_ctx = None
+
+
+def client_context():
+    """Paylaşılan istemci TLS bağlamı. Her çağrıda Windows sertifika deposunu yeniden
+    yüklemek yerine bir kez yüklenir."""
+    global _client_ctx
+    if _client_ctx is None:
+        _client_ctx = ssl.create_default_context()
+    return _client_ctx
+
+
+def tls13_context():
+    global _tls13_ctx
+    if _tls13_ctx is None:
+        _tls13_ctx = ssl.create_default_context()
+        _tls13_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+    return _tls13_ctx
 
 
 # --- Şifreli DNS (DoH, RFC 8484) --------------------------------------------
@@ -119,7 +162,7 @@ class Resolver:
 
     def __init__(self, servers=DOH_SERVERS):
         self.servers = list(servers)
-        self.ctx = ssl.create_default_context()
+        self.ctx = client_context()
         self.idle = {server: [] for server in self.servers}
         self.cache = {}
         self.pending = {}
@@ -274,7 +317,7 @@ async def probe(resolver, host, mode):
     """Verilen yöntemle host'a gerçek bir TLS el sıkışması yapar; sertifika doğrulanmazsa hata verir."""
     reader, writer = await open_tcp(resolver, host, 443)
     incoming, outgoing = ssl.MemoryBIO(), ssl.MemoryBIO()
-    tls = ssl.create_default_context().wrap_bio(incoming, outgoing, server_hostname=host)
+    tls = client_context().wrap_bio(incoming, outgoing, server_hostname=host)
     try:
         try:
             tls.do_handshake()
@@ -407,9 +450,7 @@ class Gecit:
             uwriter.write(f"CONNECT {host}:443 HTTP/1.1\r\n\r\n".encode())
             if b" 200 " not in (await ureader.readuntil(b"\r\n\r\n")).split(b"\r\n")[0]:
                 return
-            upstream_ctx = ssl.create_default_context()
-            upstream_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
-            await uwriter.start_tls(upstream_ctx, server_hostname=host)
+            await uwriter.start_tls(tls13_context(), server_hostname=host)
 
             async def client_to_server():
                 data = b""  # ilk turda el sıkışmayla birlikte gelmiş veri varsa onu da işle
@@ -510,7 +551,7 @@ class Gecit:
 
     async def serve_local(self, path, writer):
         if path.split("?")[0] == "/proxy.pac":
-            status, body = "200 OK", (PAC % self.port).encode()
+            status, body = "200 OK", (PAC % (json.dumps(bypass_domains()), self.port)).encode()
         else:
             status, body = "404 Not Found", b""
         writer.write(f"HTTP/1.1 {status}\r\nContent-Type: application/x-ns-proxy-autoconfig\r\n"
@@ -576,6 +617,18 @@ HOSTS_DOMAINS = ["updates.discord.com"]
 HOSTS_MARK = "# gecit"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+BYPASS_FILE = os.path.join(APP_DIR, "dogrudan.txt")
+
+
+def bypass_domains():
+    """Geçit'ten geçmeyecek alan adları: gömülü liste + dogrudan.txt (satır başına bir ad, # yorum)."""
+    domains = list(BYPASS_DOMAINS)
+    try:
+        with open(BYPASS_FILE, encoding="utf-8") as f:
+            domains += [line.split("#")[0].strip().lower().lstrip(".") for line in f]
+    except FileNotFoundError:
+        pass
+    return [d for d in domains if d]
 CERT_DIR = os.path.join(APP_DIR, "sertifika")
 CA_FILE = os.path.join(CERT_DIR, "gecit-kok.crt")
 CERT_FILE = os.path.join(CERT_DIR, "sunucu.crt")
@@ -789,7 +842,7 @@ async def fetch_via_proxy(port, host):
         reply = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
         if b" 200 " not in reply.split(b"\r\n")[0]:
             raise ConnectionError(reply.split(b"\r\n")[0].decode())
-        await asyncio.wait_for(writer.start_tls(ssl.create_default_context(), server_hostname=host), 10)
+        await asyncio.wait_for(writer.start_tls(client_context(), server_hostname=host), 10)
         writer.write(f"HEAD / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n".encode())
         return (await asyncio.wait_for(reader.readline(), 10)).decode().strip()
     finally:

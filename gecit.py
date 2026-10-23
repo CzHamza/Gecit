@@ -22,7 +22,9 @@ import base64
 import ctypes
 import hashlib
 import logging
+import logging.handlers
 import os
+import queue
 import re
 import shutil
 import socket
@@ -722,6 +724,17 @@ def uninstall():
     print("Windows proxy ayarı: kaldırıldı")
 
 
+def keep_console_responsive():
+    """Konsol penceresine tıklamak "seçim modunu" açar; o sırada ekrana yazan her şey, dolayısıyla
+    tüm proxy donar. Hızlı düzenleme (fareyle seçim) modunu kapat."""
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+    mode = ctypes.c_uint()
+    if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+        # ENABLE_QUICK_EDIT_MODE (0x40) kapalı; değişikliğin geçmesi için ENABLE_EXTENDED_FLAGS (0x80) açık.
+        kernel32.SetConsoleMode(handle, (mode.value & ~0x0040) | 0x0080)
+
+
 def on_console_close(callback):
     """Konsol penceresi kapatılınca callback'i çalıştırır; dönen nesne saklanmalıdır."""
     handler_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
@@ -834,9 +847,21 @@ def main():
     parser.add_argument("--remove-hosts", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
+    # Loglar ayrı bir iş parçacığında yazılır: konsol takılsa bile proxy beklemez.
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+    log_queue = queue.SimpleQueue()
+    listener = logging.handlers.QueueListener(log_queue, console)
+    listener.start()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                        format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+                        handlers=[logging.handlers.QueueHandler(log_queue)])
+    try:
+        run(args)
+    finally:
+        listener.stop()
 
+
+def run(args):
     if args.install_hosts or args.remove_hosts:
         update_hosts(args.install_hosts)
         return
@@ -854,6 +879,7 @@ def main():
         asyncio.run(run_tests(args.test or TEST_HOSTS))
         return
 
+    keep_console_responsive()
     keep_alive = None
     if not args.no_system_proxy:
         keep_alive = on_console_close(lambda: set_system_pac(None))
